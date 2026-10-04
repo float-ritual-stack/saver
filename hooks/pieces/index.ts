@@ -3,9 +3,11 @@ import { rng } from "./core";
 import type { Piece, PieceInstance, Pulse } from "./core";
 import { gargantua } from "./gargantua";
 import { lattice } from "./lattice";
+import { loom } from "./loom";
 import { columns, eclipsePiece, mandala, vennPiece } from "./pen";
+import { plusfield } from "./plusfield";
 
-const ROTATION: Piece[] = [lattice, mandala, eclipsePiece, gargantua, vennPiece, columns];
+const ROTATION: Piece[] = [lattice, mandala, plusfield, eclipsePiece, gargantua, loom, vennPiece, columns];
 
 // Each of the others in turn, a minute and a half apiece.
 const cycle: Piece = {
@@ -30,6 +32,6 @@ const cycle: Piece = {
 };
 
 export const PIECES: Record<string, Piece> = {
-  lattice, mandala, eclipse: eclipsePiece, venn: vennPiece, columns, gargantua, cycle,
+  lattice, mandala, eclipse: eclipsePiece, venn: vennPiece, columns, plusfield, loom, gargantua, cycle,
 };
 export * from "./core";

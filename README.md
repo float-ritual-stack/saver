@@ -31,7 +31,7 @@ claude plugin install saver@saver
 
 | Command | What it does |
 | --- | --- |
-| `/saver` | Opens a list of the pieces. Press 1–7 to pick one. |
+| `/saver` | Opens a list of the pieces. Press 1–9 to pick one. |
 | `/saver <piece>` | Plays that piece straight away. |
 | `/saver on` | Plays the last piece again. |
 | `/saver off` | Closes the panel. |
@@ -48,14 +48,16 @@ Narrower, it sits above the prompt.
 | Piece | What it is |
 | --- | --- |
 | lattice | Echoes grow outward from seeds, dot to dot, mirrored. |
-| mandala | A mirrored mandala of hatched bands, inked stroke by stroke. |
+| mandala | A mirrored mandala of hatched bands, inked stroke by stroke. Wide bands hold charms: bracketed diamonds, forks, and letters that mirror into b d p q. |
 | eclipse | Ruled lines that break and shift around drifting shapes. |
 | venn | Dotted circles, hatching, and a field of plus marks. |
 | columns | Graduated boxes and bundles of coloured lines. |
+| plusfield | Plus marks over drifting colour regions. Pluses on a border lose the arms that cross it. |
+| loom | Outlined bars, filled solid, with a window of boxes rolling along them as a wave. |
 | gargantua | A black hole, ray-traced one character cell at a time. |
 | cycle | Each of the others in turn, a minute and a half apiece. |
 
-lattice, mandala, eclipse, venn and columns come from dot-grid marker drawings.
+Every piece but gargantua comes from dot-grid marker drawings in a journal.
 They keep the drawings' rules: the pen moves dot to dot, lines echo lines, and everything mirrors.
 
 ## What changes them
@@ -65,6 +67,8 @@ They keep the drawings' rules: the pen moves dot to dot, lines echo lines, and e
 | lattice | plants a seed | adds a pen: faster echoes and more sprouts | recolours the drawing and plants a star |
 | mandala, columns | the pen speeds up briefly | the pen draws faster | starts a new page |
 | eclipse, venn | the wandering shape jumps | adds a drifting shape | changes the inks |
+| plusfield | the regions swell | adds a colour region | changes the colours |
+| loom | the wave speeds up | adds another wave | re-inks the loom |
 | gargantua | the disk flares | the disk spins faster and hotter | the camera swings |
 
 ## Terminal screen saver

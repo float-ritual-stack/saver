@@ -126,24 +126,27 @@ function buildMandala(cols: number, rows: number, r: Rng, seed: number): Built {
     star: (nx, ny) => Math.min(Math.max(nx, ny) * 1.12, (nx + ny) * 0.6),
     round: (nx, ny) => Math.hypot(nx, ny),
   };
-  type Band = { metric: string; thr: number; sectors: number; center?: boolean; frame?: boolean };
+  type Band = { metric: string; thr: number; sectors: number; center?: boolean; frame?: boolean; wide?: boolean };
   const bands: Band[] = [];
   let thr = 0.1 + r() * 0.06;
   bands.push({ metric: pick(r, [["diamond", 3], ["square", 1], ["star", 1]]), thr, sectors: 1, center: true });
   while (thr < 0.93) {
-    thr += 0.08 + r() * 0.13;
-    bands.push({ metric: pick(r, Object.keys(METRICS).map((n) => [n, n === "round" ? 0.5 : 1] as [string, number])), thr: Math.min(thr, 1), sectors: pick(r, [[1, 2], [2, 3], [3, 1]]) });
+    // Now and then a wide band, roomy enough to hold a row of charms.
+    const wide = r() < 0.28;
+    thr += wide ? 0.3 + r() * 0.08 : 0.08 + r() * 0.13;
+    bands.push({ metric: pick(r, Object.keys(METRICS).map((n) => [n, n === "round" ? 0.5 : 1] as [string, number])), thr: Math.min(thr, 1), sectors: wide ? 1 : pick(r, [[1, 2], [2, 3], [3, 1]]), wide });
   }
   bands.push({ metric: "square", thr: Infinity, sectors: 2, frame: true });
 
   const STYLES: [string, number][] = [["edge", 3], ["h", 1.2], ["v", 1.2], ["diag", 2], ["rings", 3.5], ["tiles", 0.8], ["dots", 0.5], ["blank", 0.15]];
   const regions = bands.flatMap((b, bi) => Array.from({ length: b.sectors }, (_, s) => ({
     band: bi, sector: s,
-    style: b.center ? "center" : b.frame ? pick(r, [["edge", 3], ["diag", 1], ["rings", 1]]) : pick(r, STYLES),
+    style: b.center ? "center" : b.wide ? "charms" : b.frame ? pick(r, [["edge", 3], ["diag", 1], ["rings", 1], ["charms", 1]]) : pick(r, STYLES),
     col: pal[Math.floor(r() * pal.length)]!, col2: pal[Math.floor(r() * pal.length)]!,
     rainbow: paletteName === "rainbow" && r() < 0.5,
     outline: !b.center && !b.frame && r() < 0.5,
     dir: r() < 0.5 ? 1 : -1, phase: Math.floor(r() * 2), gap: r() < 0.8 ? 2 : 3,
+    charm: pick(r, [["bracket", 3], ["fork", 2], ["letters", 1.5]]),
   })));
   const regionIndex = (bi: number, s: number) => regions.findIndex((g) => g.band === bi && g.sector === s);
 
@@ -212,6 +215,38 @@ function buildMandala(cols: number, rows: number, r: Rng, seed: number): Built {
         break;
       }
       case "dots": if (fx % 2 === 0 && fy % 2 === 0) put("•", g.col, fy * 4096 + fx); break;
+      case "charms": {
+        // Small motifs from the journal frames on a six-dot grid: a diamond with a plus held in corner
+        // brackets, a Y fork, or a letter that mirrors into b d p q around the centre.
+        const tx = Math.floor((fx - 1) / 6), ty = Math.floor((fy - 1) / 6), lx = (fx - 1) % 6, ly = (fy - 1) % 6;
+        if (fx < 1 || fy < 1 || lx === 5 || ly === 5) break;
+        const ox = cx + sx * (tx * 6 + 1), oy = cy + sy * (ty * 6 + 1);
+        let whole = true;
+        for (let a = 0; a <= 4 && whole; a++) for (let b = 0; b <= 4 && whole; b++) if (reg(ox + sx * a, oy + sy * b) !== ri) whole = false;
+        if (!whole) break;
+        const flip = sx * sy < 0;                       // a mirrored quarter turns its diagonals the other way
+        const diag = (c: string) => (flip ? (c === "/" ? "\\" : "/") : c);
+        const key = (tx * 97 + ty) * 64 + ly * 5 + lx, grp = ri * 100000 + tx * 97 + ty;
+        if (g.charm === "bracket") {
+          const corner = (lx <= 1 && ly <= 1 && !(lx === 1 && ly === 1)) || (lx >= 3 && ly <= 1 && !(lx === 3 && ly === 1)) ||
+                         (lx <= 1 && ly >= 3 && !(lx === 1 && ly === 3)) || (lx >= 3 && ly >= 3 && !(lx === 3 && ly === 3));
+          const cornerGroup = grp * 4 + (lx > 2 ? 1 : 0) + (ly > 2 ? 2 : 0);
+          if (corner) put(null, g.col, key, cornerGroup);
+          // The diamond's tips point outward on screen, whichever way this quarter is mirrored.
+          else if (lx === 2 && (ly === 1 || ly === 3)) put((ly === 1) === (sy > 0) ? "∧" : "∨", g.col2, key);
+          else if (ly === 2 && (lx === 1 || lx === 3)) put((lx === 1) === (sx > 0) ? "<" : ">", g.col2, key);
+          else if (lx === 2 && ly === 2) put("+", g.col, key);
+        } else if (g.charm === "fork") {
+          if (ly === 0 && lx === 1) put(diag("\\"), g.col, key);
+          else if (ly === 0 && lx === 3) put(diag("/"), g.col, key);
+          else if (lx === 2 && ly >= 1 && ly <= 3) put(null, g.col, key, grp);
+          else if (ly === 4 && (lx === 1 || lx === 3)) put("•", g.col2, key);
+        } else if (lx === 2 && ly === 2) {
+          // Drawn as q in the bottom-right quarter; each mirror turns it.
+          put(sx > 0 ? (sy > 0 ? "q" : "d") : (sy > 0 ? "p" : "b"), g.col2, key);
+        } else if ((lx === 1 || lx === 3) && (ly === 0 || ly === 4)) put("·", g.col, key);
+        break;
+      }
     }
   }
   for (const c of inks) c.region = regions[c.region]!.band * 4 + regions[c.region]!.sector;

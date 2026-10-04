@@ -1,5 +1,5 @@
 // A side panel that plays generative textmode art while you work.
-//   /saver            a list of the pieces to choose from (1-7 to pick)
+//   /saver            a list of the pieces to choose from (a number key picks)
 //   /saver <piece>    play that piece; /saver on plays the last one; /saver off closes the panel
 // The session feeds it: tool calls, running subagents, and messages typed while Claude works each
 // change the piece (on Echo Lattice: a seed, another pen, a new palette).
@@ -52,7 +52,7 @@ export const register: Register = on => {
     // Bare /saver shows the list, with the keyboard on it so 1-7 pick straight away.
     await update($, mode, () => (arg ? 'play' : 'pick'))
     await $.ui.open({ id: PANE, title: 'saver', ...(arg ? {} : { focus: true as const }) })
-    return { text: arg ? `Saver: ${await read($, piece)}.` : 'Saver: pick a piece with 1-7.' }
+    return { text: arg ? `Saver: ${await read($, piece)}.` : `Saver: pick a piece with 1-${NAMES.length}.` }
   })
 
   // Claude working is what the drawing feeds on.
