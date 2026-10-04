@@ -204,7 +204,7 @@ class PixelLayer {
       if (!sig) { if (old !== undefined) { out += APC(`a=d,d=I,i=${old},q=2`); this.shown.delete(key); } continue; }
       const img = rasterCells(cells, vcols, vx0, vy0, vw, vh, this.cw, this.ch, n);
       const id = this.nextId++;
-      const b64 = deflateSync(img.data, { level: 2 }).toString("base64");
+      const b64 = deflateSync(img.data, { level: 1 }).toString("base64");
       for (let at = 0; at < b64.length; at += 4096) {
         const more = at + 4096 < b64.length ? 1 : 0;
         out += APC(at === 0 ? `a=t,f=32,o=z,t=d,i=${id},s=${img.width},v=${img.height},q=2,m=${more}` : `m=${more}`, b64.slice(at, at + 4096));
@@ -225,7 +225,8 @@ class PixelLayer {
 
 // ── Text output, writing only the cells that changed ────────────────────────
 const sgr = (c: RGB, bg = false) => `\x1b[${bg ? 48 : 38};2;${c[0] | 0};${c[1] | 0};${c[2] | 0}m`;
-const same = (a: RGB | null, b: RGB | null) => a === b || (!!a && !!b && (a[0] | 0) === (b[0] | 0) && (a[1] | 0) === (b[1] | 0) && (a[2] | 0) === (b[2] | 0));
+// Colours that differ by less than a step of 8 are the same colour: not worth sending again.
+const same = (a: RGB | null, b: RGB | null) => a === b || (!!a && !!b && (a[0] >> 3) === (b[0] >> 3) && (a[1] >> 3) === (b[1] >> 3) && (a[2] >> 3) === (b[2] >> 3));
 
 class Screen {
   prev: Cell[] = [];
@@ -426,7 +427,7 @@ if (PIXELS) { const [cw, chh] = await cellSize(); pixels = new PixelLayer(cw, ch
 piece = make(...grid(), SEED ?? Math.floor(Math.random() * 1e9), !kitty);
 let lastHalo = -1;
 let last = performance.now();
-let glowClock = 0;
+let glowClock = 0, pixelClock = 0;
 const FRAME_MS = 1000 / 30;
 const loop = () => {
   if (!running) return;
@@ -446,9 +447,10 @@ const loop = () => {
     const [gc, gr] = grid();
     if (halo !== lastHalo) { lastHalo = halo; frame += glowLayer.frame(PIXELS ? glowImage(cells, gc, gr, 1, 2) : glowImage(cells, gc, gr), cols, rows); }
   }
+  pixelClock += dt;
   if (pixels) {
-    // A terminal still taking in earlier frames gets this one skipped, not queued.
-    if (out.writableLength < 2_000_000) frame += "\x1b7" + pixels.frame(cells, cols, rows) + "\x1b8";
+    // Pixel tiles go out at most 15 times a second; a terminal still taking in earlier frames gets this one skipped.
+    if (pixelClock >= 1 / 15 && out.writableLength < 2_000_000) { pixelClock = 0; frame += "\x1b7" + pixels.frame(cells, cols, rows) + "\x1b8"; }
   } else frame += screen.paint(cells, cols, rows);
   write(frame + "\x1b[?2026l");
   setTimeout(loop, Math.max(0, FRAME_MS - (performance.now() - now)));

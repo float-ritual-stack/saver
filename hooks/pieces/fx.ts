@@ -97,6 +97,10 @@ const AMBIENT: Record<string, (r: () => number) => Ambient> = {
 };
 export const EFFECTS = Object.keys(AMBIENT);
 
+/** Colours rounded to steps of 8, so an effect's tiny shifts never count as a change. */
+const q = (c: RGB): RGB => [(c[0] >> 3) << 3, (c[1] >> 3) << 3, (c[2] >> 3) << 3];
+const quantize = (c: Cell): Cell => ({ ...c, fg: q(c.fg), bg: c.bg ? q(c.bg) : c.bg, halo: c.halo ? q(c.halo) : c.halo });
+
 // ── Arrivals and departures ─────────────────────────────────────────────────
 /** Decrypt: each cell shows noise in a cold green until its moment, then settles into what the piece drew. */
 function decrypt(c: Cell, x: number, y: number, p: number, seed: number, t: number): Cell {
@@ -162,7 +166,9 @@ export function withFx(piece: Piece, mode: () => FxMode = () => "auto"): Piece {
           const active = m === "off" ? [] : m === "auto" ? pick : EFFECTS.includes(m) ? [m] : pick;
           // The piece's own fade (a page ending) brings a palette spin with it.
           const ending = inner.ending?.() ?? 0;
-          const ctx: Ctx = { cols, rows, t, seed };
+          // Colour effects step like Amiga colour cycling (12 steps a second) rather than slide, so a cell only
+          // changes when its colour does: the terminal is sent a fraction of the cells.
+          const ctx: Ctx = { cols, rows, t: Math.floor(t * 12) / 12, seed };
           const arriving = arrive < 1.6 && m !== "off" ? arrive / 1.6 : 1;
           const p = leaving ? Math.min(1, (t - leaving.at) / leaving.len) : 0;
           const extra: [string, number][] = [];
@@ -180,7 +186,7 @@ export function withFx(piece: Piece, mode: () => FxMode = () => "auto"): Piece {
             for (const [name, k] of extra) c = made[name]!(c, x, y, ctx, Math.min(1, k));
             if (arriving < 1) c = decrypt(c, x, y, arriving, seed, t);
             if (leaving) c = depart(c, x, y, p, seed, t, leaveRamp);
-            out[i] = c;
+            out[i] = c === cells[i] ? c : quantize(c);
           }
           return out;
         },
