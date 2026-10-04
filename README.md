@@ -31,7 +31,7 @@ claude plugin install saver@saver
 
 | Command | What it does |
 | --- | --- |
-| `/saver` | Opens a list of the pieces. Press 1–9 to pick one. |
+| `/saver` | Opens a list of the pieces. Press a piece's key (1–9, 0, then letters) to play it. |
 | `/saver <piece>` | Plays that piece straight away. |
 | `/saver on` | Plays the last piece again. |
 | `/saver off` | Closes the panel. |
@@ -54,10 +54,12 @@ Narrower, it sits above the prompt.
 | columns | Graduated boxes and bundles of coloured lines. |
 | plusfield | Plus marks over drifting colour regions. Pluses on a border lose the arms that cross it. |
 | loom | Outlined bars, filled solid, with a window of boxes rolling along them as a wave. |
+| canopy | Op-art stripes in square rings flowing into a drifting vanishing point, woven with a zigzag and lit magenta, blue and red. |
+| seed | A flower of life drawn circle by circle, with dotwork shading, a nested triangle frame and a turning triskele. |
 | gargantua | A black hole, ray-traced one character cell at a time. |
 | cycle | Each of the others in turn, a minute and a half apiece. |
 
-Every piece but gargantua comes from dot-grid marker drawings in a journal.
+Most pieces come from dot-grid marker drawings in a journal; canopy and seed come from tattoos and a striped canopy.
 They keep the drawings' rules: the pen moves dot to dot, lines echo lines, and everything mirrors.
 
 ## What changes them
@@ -69,6 +71,8 @@ They keep the drawings' rules: the pen moves dot to dot, lines echo lines, and e
 | eclipse, venn | the wandering shape jumps | adds a drifting shape | changes the inks |
 | plusfield | the regions swell | adds a colour region | changes the colours |
 | loom | the wave speeds up | adds another wave | re-inks the loom |
+| canopy | the stripes flow faster | adds a vanishing point whose rings interfere | turns the lights |
+| seed | scatters fresh dotwork | opens another ring of circles | reverses the triskele and changes its colour |
 | gargantua | the disk flares | the disk spins faster and hotter | the camera swings |
 
 ## Terminal screen saver

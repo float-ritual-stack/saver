@@ -2,13 +2,13 @@
   "$schema": "https://code.claude.com/marketplace.schema.json",
   "name": "saver",
   "owner": { "name": "Float Ritual Stack" },
-  "metadata": { "description": "Generative textmode art for Claude Code and the terminal", "version": "0.2.0" },
+  "metadata": { "description": "Generative textmode art for Claude Code and the terminal", "version": "0.3.0" },
   "plugins": [
     {
       "name": "saver",
       "source": "./",
       "description": "Generative textmode art in a side panel while you work: /saver to pick a piece; tool calls, subagents and your messages change it",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "category": "art",
       "tags": ["art", "textmode", "screensaver", "panel"]
     }

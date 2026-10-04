@@ -14,6 +14,8 @@ const PANE = 'saver'
 const KEY = 'view'
 const FRAME_MS = 33
 const NAMES = Object.keys(PIECES)
+// One key per piece: digits, then letters, leaving p (pick) and x (close) free.
+const KEYS = '1234567890abcdefghijklmnoqrstuvwyz'
 const piece = atom({ plugin: 'saver', key: 'piece' } as const, 'cycle')
 const mode = atom({ plugin: 'saver', key: 'mode' } as const, 'pick' as SaverMode)
 
@@ -52,7 +54,7 @@ export const register: Register = on => {
     // Bare /saver shows the list, with the keyboard on it so 1-7 pick straight away.
     await update($, mode, () => (arg ? 'play' : 'pick'))
     await $.ui.open({ id: PANE, title: 'saver', ...(arg ? {} : { focus: true as const }) })
-    return { text: arg ? `Saver: ${await read($, piece)}.` : `Saver: pick a piece with 1-${NAMES.length}.` }
+    return { text: arg ? `Saver: ${await read($, piece)}.` : 'Saver: press a piece\'s key to play it.' }
   })
 
   // Claude working is what the drawing feeds on.
@@ -102,7 +104,7 @@ export const register: Register = on => {
           <Text> </Text>
           {NAMES.map((n, i) => (
             <Box flexDirection="row">
-              <Button key={n} plain hotkey={String(i + 1)} variant={n === name ? 'primary' : undefined} onPress={choose(n)}>{n}</Button>
+              <Button key={n} plain hotkey={KEYS[i]} variant={n === name ? 'primary' : undefined} onPress={choose(n)}>{n}</Button>
               <Text dimColor>  {PIECES[n]!.blurb}</Text>
             </Box>
           ))}

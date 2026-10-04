@@ -23,7 +23,7 @@ const decode = (b64: string) => {
 test('a bare pane lists every piece to pick from', async ($, on) => {
   mock.clock(on)
   const drawn = await $.ui.mount({ plugin: 'saver', surface: 'terminal', component: 'Pane', requestId: 'saver', props: PANE_PROPS })
-  for (const name of ['lattice', 'mandala', 'eclipse', 'venn', 'columns', 'plusfield', 'loom', 'gargantua', 'cycle']) {
+  for (const name of ['lattice', 'mandala', 'eclipse', 'venn', 'columns', 'plusfield', 'loom', 'canopy', 'seed', 'gargantua', 'cycle']) {
     expect(await drawn.find({ type: 'Button', key: name })).toBeDefined()
   }
   expect(await drawn.find({ type: 'Raster' })).toBeUndefined()
