@@ -1,0 +1,9 @@
+{
+  "name": "saver",
+  "version": "0.1.0",
+  "description": "Generative textmode art in a side panel while you work: /saver to pick a piece; tool calls, subagents and your messages change it",
+  "author": { "name": "Evan Schultz" },
+  "repository": "https://github.com/float-ritual-stack/saver",
+  "keywords": ["art", "textmode", "screensaver", "panel", "generative"],
+  "types": "./types/index.d.ts"
+}
