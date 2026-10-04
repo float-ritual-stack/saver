@@ -35,8 +35,10 @@ claude plugin install saver@saver
 | `/saver <piece>` | Plays that piece straight away. |
 | `/saver on` | Plays the last piece again. |
 | `/saver off` | Closes the panel. |
+| `/saver fx <name>` | Effects: `auto` (each piece its own mix), `off`, `cycle`, `shimmer`, `beam`, `drift`, `glitch`. |
+| `/saver panes` | Counts the terminal savers listening. `/saver panes <piece>` or `/saver panes fx <name>` changes them. |
 
-While a piece plays, `p` goes back to the list and `x` closes the panel.
+While a piece plays, `p` goes back to the list, `f` cycles the effects, and `x` closes the panel.
 The panel needs the keyboard for those keys: click it, or press ctrl+x tab.
 
 The panel draws in the terminal only.
@@ -62,6 +64,22 @@ Narrower, it sits above the prompt.
 Most pieces come from dot-grid marker drawings in a journal; canopy and seed come from tattoos and a striped canopy.
 They keep the drawings' rules: the pen moves dot to dot, lines echo lines, and everything mirrors.
 
+## Effects
+
+Every piece plays with effects on top, after [tachyonfx](https://github.com/ratatui/tachyonfx) and [terminaltexteffects](https://github.com/ChrisBuilds/terminaltexteffects):
+
+| Effect | What it does |
+| --- | --- |
+| cycle | Amiga-style colour cycling: a gradient ramp flows along a diagonal, a ring or a sweep of angle. |
+| shimmer | A few strokes at a time catch the light, flash white and fade. |
+| beam | A band of light sweeps across the drawing. |
+| drift | The palette turns slowly around the colour wheel. |
+| glitch | Now and then a row tears into noise. |
+
+With `auto`, each piece gets its own seeded mix and strength.
+Pieces decrypt in as they arrive. A page that's ending spins its palette before it fades, and in `cycle` the outgoing piece's palette spins faster and brighter until it dissolves.
+A tool call sets off a shimmer burst; your message mid-turn sets off a colour-cycle burst.
+
 ## What changes them
 
 | Piece | A tool call | Each running subagent | Your message mid-turn |
@@ -84,6 +102,7 @@ bun tty/saver.ts                     # cycle through every piece; any key exits
 bun tty/saver.ts --piece gargantua   # one piece
 bun tty/saver.ts --play              # p: tool call, a/A: subagents, m: message, space: new seed, q: quit
 bun tty/saver.ts --text              # never use graphics
+bun tty/saver.ts --fx cycle          # one effect; --fx off for none (f cycles them with --play)
 bun tty/saver.ts --pixels            # draw the art as pixels, twice as fine as the font (kitty, Ghostty)
 bun tty/saver.ts --pixels --density 3   # three times as fine
 ```
@@ -102,6 +121,12 @@ To start it when tmux has been idle for five minutes:
 set -g lock-after-time 300
 set -g lock-command "bun /path/to/saver/tty/saver.ts --text"
 ```
+
+## Panes and the panel together
+
+Every running `tty/saver.ts` listens on its own Unix socket in `~/.cache/saver/` (`--no-listen` turns that off).
+The Claude Code mod sends each pulse (tool calls, subagents, your messages) to every saver listening, so art in any terminal pane reacts to Claude's work, with or without the panel open.
+`/saver panes <piece>` and `/saver panes fx <name>` switch what the panes play.
 
 ## Layout
 

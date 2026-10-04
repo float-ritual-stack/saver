@@ -19,6 +19,8 @@ export interface PieceInstance {
   cells(): Cell[];
   /** Something happened in the session: a tool call, the running subagents changed, or a message arrived mid-turn. */
   react?(pulse: Pulse): void;
+  /** 0 while the piece plays; rising to 1 as it fades out on its own (a page ending). */
+  ending?(): number;
   label(): string;
 }
 

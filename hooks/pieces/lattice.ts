@@ -286,6 +286,7 @@ export const lattice: Piece = {
           wake();
         }
       },
+      ending: () => (L.state === "fading" ? 1 - Math.max(0, L.fade) : L.state === "resting" ? Math.min(0.6, (L.clock - L.doneAt) / 9 * 0.6) : 0),
       label: () => `echo lattice / ${L.symmetry} / ${L.paletteName} / echo ${L.gen}`,
     };
   },

@@ -1,12 +1,14 @@
 // A side panel that plays generative textmode art while you work.
 //   /saver            a list of the pieces to choose from (a number key picks)
 //   /saver <piece>    play that piece; /saver on plays the last one; /saver off closes the panel
+//   /saver panes <piece> | panes fx <name>   change the savers running in terminal panes
+//   /saver fx <name>  effects: auto, off, cycle, shimmer, beam, drift, glitch (f in the panel cycles them)
 // The session feeds it: tool calls, running subagents, and messages typed while Claude works each
 // change the piece (on Echo Lattice: a seed, another pen, a new palette).
 import { atom, read, update } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
-import { PIECES, encodeRaster } from './pieces/index'
+import { EFFECTS, PIECES, encodeRaster, getFx, setFx } from './pieces/index'
 import type { PieceInstance } from './pieces/index'
 import type { SaverMode } from '../types'
 
@@ -15,13 +17,36 @@ const KEY = 'view'
 const FRAME_MS = 33
 const NAMES = Object.keys(PIECES)
 // One key per piece: digits, then letters, leaving p (pick) and x (close) free.
-const KEYS = '1234567890abcdefghijklmnoqrstuvwyz'
+const KEYS = '1234567890abcdeghijklmnoqrstuvwyz'   // f is the effects key
 const piece = atom({ plugin: 'saver', key: 'piece' } as const, 'cycle')
 const mode = atom({ plugin: 'saver', key: 'mode' } as const, 'pick' as SaverMode)
 
 // The running animation is regenerable, so it lives in the module: a reload starts it afresh.
 let agents = 0
 let running: { name: string; cols: number; rows: number; art: PieceInstance; timer: { cancel(): void } } | null = null
+
+// ── Savers running in terminal panes ────────────────────────────────────────
+// Every `bun tty/saver.ts` listens on a socket in ~/.cache/saver; each pulse goes to all of them, unawaited, so
+// Claude's tool calls never wait on the art.
+type Dollar = EngineInterface
+let sockDir: string | null = null
+async function sockets($: Dollar): Promise<string[]> {
+  if (!sockDir) {
+    const home = await $.env.get('HOME')
+    if (!home) return []
+    sockDir = `${home}/.cache/saver`
+  }
+  try {
+    return (await $.fs.list(sockDir)).filter(e => e.name.endsWith('.sock')).map(e => `${sockDir}/${e.name}`)
+  } catch { return [] }
+}
+function tell($: Dollar, path: string, body: object) {
+  void sockets($).then(list => {
+    for (const socketPath of list) {
+      void $.http.fetch(`http://saver${path}`, { method: 'POST', body: JSON.stringify(body), socketPath }).catch(() => {})
+    }
+  })
+}
 
 function stop() {
   running?.timer.cancel()
@@ -39,6 +64,22 @@ export const register: Register = on => {
 
   on('command.run', { command: 'saver' }, async ($, e) => {
     const arg = e.args.trim().toLowerCase()
+    // /saver panes <piece|fx name>: change what the savers in terminal panes play.
+    if (arg.startsWith('panes')) {
+      const what = arg.slice(5).trim()
+      const list = await sockets($)
+      if (!what) return { text: `${list.length} saver${list.length === 1 ? '' : 's'} listening in terminal panes. /saver panes <piece> or /saver panes fx <name> changes them.` }
+      if (what.startsWith('fx')) tell($, '/fx', { mode: what.slice(2).trim() || 'auto' })
+      else if (PIECES[what]) tell($, '/piece', { name: what })
+      else return { text: `No piece "${what}". Pieces: ${NAMES.join(', ')}.` }
+      return { text: `Sent to ${list.length} saver${list.length === 1 ? '' : 's'}: ${what}.` }
+    }
+    if (arg.startsWith('fx')) {
+      const want = arg.slice(2).trim() || 'auto'
+      if (want !== 'auto' && want !== 'off' && !EFFECTS.includes(want)) return { text: `Effects: auto, off, ${EFFECTS.join(', ')}.` }
+      setFx(want)
+      return { text: `Saver effects: ${want}.` }
+    }
     if (arg === 'off') {
       stop()
       try {
@@ -60,24 +101,27 @@ export const register: Register = on => {
   // Claude working is what the drawing feeds on.
   on('tool.call', async ($, e, next) => {
     running?.art.react?.({ kind: 'tool' })
+    tell($, '/pulse', { kind: 'tool' })
     return next(e)
   })
 
   on('classic.SubagentStart', async ($, e, next) => {
     agents++
     running?.art.react?.({ kind: 'agents', running: agents })
+    tell($, '/pulse', { kind: 'agents', running: agents })
     return next(e)
   })
 
   on('classic.SubagentStop', async ($, e, next) => {
     agents = Math.max(0, agents - 1)
     running?.art.react?.({ kind: 'agents', running: agents })
+    tell($, '/pulse', { kind: 'agents', running: agents })
     return next(e)
   })
 
   // A message typed while a turn runs carries that turn's id.
   on('prompt.submit', async ($, e, next) => {
-    if (e.turnId) running?.art.react?.({ kind: 'message' })
+    if (e.turnId) { running?.art.react?.({ kind: 'message' }); tell($, '/pulse', { kind: 'message' }) }
     return next(e)
   })
 
@@ -144,6 +188,8 @@ export const register: Register = on => {
           <Button key="pick" plain hotkey="p" dimColor onPress={() => update($, mode, () => 'pick')}>pick</Button>
           <Text dimColor>  </Text>
           <Button key="close" plain hotkey="x" dimColor onPress={close}>close</Button>
+          <Text dimColor>  </Text>
+          <Button key="fx" plain hotkey="f" dimColor onPress={() => { const order = ['auto', ...EFFECTS, 'off']; setFx(order[(order.indexOf(getFx()) + 1) % order.length]!) }}>fx</Button>
           <Text dimColor>   {name}</Text>
         </Box>
       </Box>

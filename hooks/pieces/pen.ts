@@ -320,6 +320,7 @@ function revealed(build: (cols: number, rows: number, r: Rng, seed: number) => B
         else if (p.kind === "agents") pens = Math.min(6, p.running);
         else next();
       },
+      ending: () => Math.max(0, Math.min(1, (clock - page.duration - 6) / 6)),
       label: () => page.label,
     };
   };

@@ -9,21 +9,36 @@ import { columns, eclipsePiece, mandala, vennPiece } from "./pen";
 import { plusfield } from "./plusfield";
 import { seedPiece } from "./seed";
 
-const ROTATION: Piece[] = [lattice, mandala, plusfield, canopy, seedPiece, eclipsePiece, gargantua, loom, vennPiece, columns];
+import { withFx } from "./fx";
+import type { FxControl, FxMode } from "./fx";
 
-// Each of the others in turn, a minute and a half apiece.
+// The effects every piece plays with: auto (each piece its own seeded mix), off, or one effect by name.
+let fxMode: FxMode = "auto";
+export const setFx = (m: FxMode) => { fxMode = m; };
+export const getFx = () => fxMode;
+const fx = (p: Piece) => withFx(p, () => fxMode);
+
+const ROTATION: Piece[] = [lattice, mandala, plusfield, canopy, seedPiece, eclipsePiece, gargantua, loom, vennPiece, columns].map(fx);
+
+// Each of the others in turn, a minute and a half apiece: the outgoing piece's palette spins and dissolves,
+// and the next one decrypts in.
 const cycle: Piece = {
   name: "cycle",
   blurb: "each of the others in turn, a minute and a half apiece",
   create(cols, rows, seed, opts) {
     const r = rng(seed);
-    let at = Math.floor(r() * ROTATION.length), clock = 0;
-    let current: PieceInstance = ROTATION[at]!.create(cols, rows, Math.floor(r() * 1e9), opts);
+    let at = Math.floor(r() * ROTATION.length), clock = 0, leaving = false;
+    const start = () => ROTATION[at]!.create(cols, rows, Math.floor(r() * 1e9), opts) as PieceInstance & FxControl;
+    let current = start();
     let agents = 0;   // a piece that rotates in learns how many subagents are already running
+    const next = () => {
+      at = (at + 1) % ROTATION.length; clock = 0; leaving = false;
+      current = start(); current.react?.({ kind: "agents", running: agents });
+    };
     return {
       tick(dt) {
         clock += dt;
-        if (clock > 90) { clock = 0; at = (at + 1) % ROTATION.length; current = ROTATION[at]!.create(cols, rows, Math.floor(r() * 1e9), opts); current.react?.({ kind: "agents", running: agents }); }
+        if (clock > 90 && !leaving) { leaving = true; if (current.leave) current.leave(3, next); else next(); }
         current.tick(dt);
       },
       cells: () => current.cells(),
@@ -34,6 +49,8 @@ const cycle: Piece = {
 };
 
 export const PIECES: Record<string, Piece> = {
-  lattice, mandala, eclipse: eclipsePiece, venn: vennPiece, columns, plusfield, loom, canopy, seed: seedPiece, gargantua, cycle,
+  ...Object.fromEntries(ROTATION.map((p) => [p.name, p])),
+  cycle,
 };
+export { EFFECTS } from "./fx";
 export * from "./core";

@@ -10,13 +10,16 @@
 //   bun saver.ts --play          space: new piece seed  p: a tool call  a/A: one more/fewer subagent  m: a message  q: quit
 //   bun saver.ts --piece NAME    cycle (default: each piece in turn), lattice, mandala, eclipse, venn, columns, gargantua
 //   bun saver.ts --text          never use graphics
+//   bun saver.ts --no-listen     ignore Claude Code (by default the saver mod's pulses reach every running saver)
+//   bun saver.ts --fx NAME       effects: auto (default), off, cycle, shimmer, beam, drift, glitch (f cycles them with --play)
 //   bun saver.ts --pixels        draw the art as pixels (Kitty graphics), on a grid --density 2|3|4 times finer
 //   bun saver.ts --snapshot DIR --at 20   render one frame to DIR (no terminal needed), for checking by eye
 import { deflateSync } from "node:zlib";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { GROUND, PIECES } from "../hooks/pieces";
+import { chmodSync, existsSync, unlinkSync } from "node:fs";
+import { EFFECTS, GROUND, PIECES, getFx, setFx } from "../hooks/pieces";
 import { glyphMask } from "./glyphs";
 import type { Cell, PieceInstance, RGB } from "../hooks/pieces";
 
@@ -30,9 +33,12 @@ const FORCE_KITTY = flag("--kitty");
 const SNAPSHOT = value("--snapshot");
 const SNAP_AT = Number(value("--at") ?? 20);
 const SEED = value("--seed") ? Number(value("--seed")) : undefined;
-const PIECE = value("--piece") ?? "cycle";
+let PIECE = value("--piece") ?? "cycle";
 // --pixels: the piece runs on a grid DENSITY times finer than the terminal's, drawn as pixels through Kitty graphics.
 const PIXELS = flag("--pixels");
+// --fx auto (default: each piece its own mix) | off | cycle | shimmer | beam | drift | glitch
+setFx(value("--fx") ?? "auto");
+const FX_ORDER = ["auto", ...EFFECTS, "off"];
 const DENSITY = Math.max(1, Math.min(4, Number(value("--density") ?? 2)));
 if (!PIECES[PIECE]) { console.error(`unknown piece "${PIECE}"; pieces: ${Object.keys(PIECES).join(", ")}`); process.exit(1); }
 const make = (cols: number, rows: number, seed: number, tint: boolean): PieceInstance =>
@@ -317,9 +323,39 @@ let agents = 0;
 let pending = "";
 
 const write = (s: string) => { if (s) out.write(s); };
+// ── Listening for Claude Code ───────────────────────────────────────────────
+// Each saver listens on its own Unix socket in ~/.cache/saver; the Claude Code mod sends its session's pulses
+// to every socket there, so a saver in any pane reacts to Claude's work. --no-listen turns it off.
+const SOCK_DIR = join(homedir(), ".cache", "saver");
+const SOCK = join(SOCK_DIR, `${process.pid}.sock`);
+let server: { stop(force?: boolean): void } | null = null;
+function listen() {
+  if (flag("--no-listen")) return;
+  try {
+    mkdirSync(SOCK_DIR, { recursive: true });
+    chmodSync(SOCK_DIR, 0o700);
+    if (existsSync(SOCK)) unlinkSync(SOCK);
+    server = Bun.serve({
+      unix: SOCK,
+      async fetch(req) {
+        const path = new URL(req.url).pathname;
+        const body = (await req.json().catch(() => ({}))) as { kind?: string; running?: number; name?: string; mode?: string };
+        if (path === "/pulse" && (body.kind === "tool" || body.kind === "message")) piece.react?.({ kind: body.kind });
+        else if (path === "/pulse" && body.kind === "agents") { agents = Math.max(0, Math.min(6, body.running ?? 0)); piece.react?.({ kind: "agents", running: agents }); }
+        else if (path === "/piece" && body.name && PIECES[body.name]) { PIECE = body.name; piece = fresh(); }
+        else if (path === "/fx" && body.mode) setFx(body.mode);
+        else if (path === "/hello") return Response.json({ piece: PIECE, fx: getFx(), cols, rows, pixels: !!pixels });
+        else return new Response("unknown", { status: 404 });
+        return new Response("ok");
+      },
+    });
+  } catch { server = null; }
+}
+
 function restore() {
   if (!running) return;
   running = false;
+  try { server?.stop(true); if (existsSync(SOCK)) unlinkSync(SOCK); } catch {}
   write(glowLayer.dispose() + (pixels?.dispose() ?? "") + "\x1b[0m\x1b[2J\x1b[?25h\x1b[?1049l");
   try { stdin.setRawMode(false); } catch {}
   stdin.pause();
@@ -346,6 +382,7 @@ stdin.on("data", (buf: Buffer) => {
     if (k === " ") piece = fresh();
     if (k === "p") piece.react?.({ kind: "tool" });
     if (k === "m") piece.react?.({ kind: "message" });
+    if (k === "f") setFx(FX_ORDER[(FX_ORDER.indexOf(getFx()) + 1) % FX_ORDER.length]!);
     if (k === "a" || k === "A") { agents = Math.max(0, Math.min(6, agents + (k === "a" ? 1 : -1))); piece.react?.({ kind: "agents", running: agents }); }
   }
 });
@@ -416,4 +453,5 @@ const loop = () => {
   write(frame + "\x1b[?2026l");
   setTimeout(loop, Math.max(0, FRAME_MS - (performance.now() - now)));
 };
+listen();
 loop();
