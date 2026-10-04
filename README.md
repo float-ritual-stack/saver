@@ -84,11 +84,17 @@ bun tty/saver.ts                     # cycle through every piece; any key exits
 bun tty/saver.ts --piece gargantua   # one piece
 bun tty/saver.ts --play              # p: tool call, a/A: subagents, m: message, space: new seed, q: quit
 bun tty/saver.ts --text              # never use graphics
+bun tty/saver.ts --pixels            # draw the art as pixels, twice as fine as the font (kitty, Ghostty)
+bun tty/saver.ts --pixels --density 3   # three times as fine
 ```
 
 Strokes stay real terminal text, in the terminal's own font.
 Where the terminal supports the Kitty graphics protocol (kitty, Ghostty, Herdr with `kitty_graphics` on), a soft glow image sits under the text.
 Elsewhere, the glow becomes tinted cell backgrounds.
+
+`--pixels` goes further: the saver draws every glyph itself, anti-aliased, into images placed over the cells.
+The piece runs on a grid two to four times finer than the terminal's font, so the art gets denser while the font stays the same.
+Only tiles that changed are re-sent.
 
 To start it when tmux has been idle for five minutes:
 

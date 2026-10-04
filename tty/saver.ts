@@ -10,12 +10,14 @@
 //   bun saver.ts --play          space: new piece seed  p: a tool call  a/A: one more/fewer subagent  m: a message  q: quit
 //   bun saver.ts --piece NAME    cycle (default: each piece in turn), lattice, mandala, eclipse, venn, columns, gargantua
 //   bun saver.ts --text          never use graphics
+//   bun saver.ts --pixels        draw the art as pixels (Kitty graphics), on a grid --density 2|3|4 times finer
 //   bun saver.ts --snapshot DIR --at 20   render one frame to DIR (no terminal needed), for checking by eye
 import { deflateSync } from "node:zlib";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { GROUND, PIECES } from "../hooks/pieces";
+import { glyphMask } from "./glyphs";
 import type { Cell, PieceInstance, RGB } from "../hooks/pieces";
 
 // ── Options ─────────────────────────────────────────────────────────────────
@@ -29,13 +31,16 @@ const SNAPSHOT = value("--snapshot");
 const SNAP_AT = Number(value("--at") ?? 20);
 const SEED = value("--seed") ? Number(value("--seed")) : undefined;
 const PIECE = value("--piece") ?? "cycle";
+// --pixels: the piece runs on a grid DENSITY times finer than the terminal's, drawn as pixels through Kitty graphics.
+const PIXELS = flag("--pixels");
+const DENSITY = Math.max(1, Math.min(4, Number(value("--density") ?? 2)));
 if (!PIECES[PIECE]) { console.error(`unknown piece "${PIECE}"; pieces: ${Object.keys(PIECES).join(", ")}`); process.exit(1); }
 const make = (cols: number, rows: number, seed: number, tint: boolean): PieceInstance =>
-  PIECES[PIECE]!.create(cols, rows, seed, { tint, quality: 1 });
+  PIECES[PIECE]!.create(cols, rows, seed, { tint, quality: PIXELS ? 0.5 : 1 });
 
 // ── The glow raster, built from each cell's halo ────────────────────────────
-const GLOW_X = 2, GLOW_Y = 4;   // glow pixels per cell; the terminal stretches them smoothly
-function glowImage(cells: Cell[], cols: number, rows: number) {
+// Glow pixels per cell (GLOW_X, GLOW_Y below): coarse on purpose, since the terminal stretches them smoothly.
+function glowImage(cells: Cell[], cols: number, rows: number, GLOW_X = 2, GLOW_Y = 4) {
   const gw = cols * GLOW_X, gh = rows * GLOW_Y;
   const acc = new Float32Array(gw * gh * 3);
   for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
@@ -128,6 +133,90 @@ class GlowLayer {
   }
 }
 
+// ── Pixels: the piece's cells drawn as anti-aliased glyphs, tile by tile ────
+type Rgba = { width: number; height: number; data: Uint8Array };
+
+/** Draws cells `vx0..vx0+vw`, `vy0..vy0+vh` of a `vcols`-wide grid into an image, each cell `cw/n` × `ch/n` pixels. */
+function rasterCells(cells: Cell[], vcols: number, vx0: number, vy0: number, vw: number, vh: number, cw: number, ch: number, n: number): Rgba {
+  const px0 = Math.floor((vx0 * cw) / n), py0 = Math.floor((vy0 * ch) / n);
+  const width = Math.floor(((vx0 + vw) * cw) / n) - px0, height = Math.floor(((vy0 + vh) * ch) / n) - py0;
+  const data = new Uint8Array(width * height * 4);
+  for (let j = 0; j < vh; j++) {
+    const y0 = Math.floor(((vy0 + j) * ch) / n) - py0, y1 = Math.floor(((vy0 + j + 1) * ch) / n) - py0;
+    for (let i = 0; i < vw; i++) {
+      const c = cells[(vy0 + j) * vcols + vx0 + i];
+      if (!c) continue;
+      const x0 = Math.floor(((vx0 + i) * cw) / n) - px0, x1 = Math.floor(((vx0 + i + 1) * cw) / n) - px0;
+      const gw = x1 - x0, gh = y1 - y0;
+      if (gw <= 0 || gh <= 0) continue;
+      if (c.bg) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+        const o = (y * width + x) * 4;
+        data[o] = c.bg[0]; data[o + 1] = c.bg[1]; data[o + 2] = c.bg[2]; data[o + 3] = 255;
+      }
+      if (c.ch === " ") continue;
+      const m = glyphMask(c.ch, gw, gh);
+      for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+        const a = m[y * gw + x]!;
+        if (!a) continue;
+        const o = ((y0 + y) * width + x0 + x) * 4, k = a / 255;
+        if (data[o + 3] === 255) {
+          // Over a filled cell: mix toward the ink.
+          data[o] += (c.fg[0] - data[o]!) * k; data[o + 1] += (c.fg[1] - data[o + 1]!) * k; data[o + 2] += (c.fg[2] - data[o + 2]!) * k;
+        } else {
+          data[o] = c.fg[0]; data[o + 1] = c.fg[1]; data[o + 2] = c.fg[2]; data[o + 3] = Math.max(data[o + 3]!, a);
+        }
+      }
+    }
+  }
+  return { width, height, data };
+}
+
+/** The screen in tiles of terminal cells: a tile is redrawn and re-sent only when its cells change. */
+class PixelLayer {
+  static TW = 16; static TH = 8;
+  private shown = new Map<number, number>();     // tile → image id on screen
+  private sigs = new Map<number, string>();
+  private nextId = 900_000 + Math.floor(Math.random() * 1_000_000);
+  constructor(private cw: number, private ch: number, private n: number) {}
+  reset(): string { const out = this.dispose(); this.sigs.clear(); return out; }
+  frame(cells: Cell[], cols: number, rows: number): string {
+    const { TW, TH } = PixelLayer, n = this.n, vcols = cols * n;
+    let out = "";
+    for (let ty = 0; ty * TH < rows; ty++) for (let tx = 0; tx * TW < cols; tx++) {
+      const wc = Math.min(TW, cols - tx * TW), hc = Math.min(TH, rows - ty * TH);
+      const vx0 = tx * TW * n, vy0 = ty * TH * n, vw = wc * n, vh = hc * n;
+      let sig = "";
+      for (let j = 0; j < vh; j++) for (let i = 0; i < vw; i++) {
+        const c = cells[(vy0 + j) * vcols + vx0 + i];
+        if (c && c.ch !== " ") sig += `${i},${j}${c.ch}${c.fg[0] >> 3},${c.fg[1] >> 3},${c.fg[2] >> 3};`;
+        if (c?.bg) sig += `b${i},${j}${c.bg[0] >> 3},${c.bg[1] >> 3},${c.bg[2] >> 3};`;
+      }
+      const key = ty * 10_000 + tx;
+      if (this.sigs.get(key) === sig) continue;
+      this.sigs.set(key, sig);
+      const old = this.shown.get(key);
+      if (!sig) { if (old !== undefined) { out += APC(`a=d,d=I,i=${old},q=2`); this.shown.delete(key); } continue; }
+      const img = rasterCells(cells, vcols, vx0, vy0, vw, vh, this.cw, this.ch, n);
+      const id = this.nextId++;
+      const b64 = deflateSync(img.data, { level: 2 }).toString("base64");
+      for (let at = 0; at < b64.length; at += 4096) {
+        const more = at + 4096 < b64.length ? 1 : 0;
+        out += APC(at === 0 ? `a=t,f=32,o=z,t=d,i=${id},s=${img.width},v=${img.height},q=2,m=${more}` : `m=${more}`, b64.slice(at, at + 4096));
+      }
+      out += `\x1b[${ty * TH + 1};${tx * TW + 1}H` + APC(`a=p,i=${id},p=1,c=${wc},r=${hc},C=1,z=1,q=2`);
+      if (old !== undefined) out += APC(`a=d,d=I,i=${old},q=2`);
+      this.shown.set(key, id);
+    }
+    return out;
+  }
+  dispose(): string {
+    let out = "";
+    for (const id of this.shown.values()) out += APC(`a=d,d=I,i=${id},q=2`);
+    this.shown.clear();
+    return out;
+  }
+}
+
 // ── Text output, writing only the cells that changed ────────────────────────
 const sgr = (c: RGB, bg = false) => `\x1b[${bg ? 48 : 38};2;${c[0] | 0};${c[1] | 0};${c[2] | 0}m`;
 const same = (a: RGB | null, b: RGB | null) => a === b || (!!a && !!b && (a[0] | 0) === (b[0] | 0) && (a[1] | 0) === (b[1] | 0) && (a[2] | 0) === (b[2] | 0));
@@ -184,6 +273,23 @@ if (SNAPSHOT) {
     for (let r = 0; r < rows; r++) { for (let c = 0; c < cols; c++) { const k = cs[r * cols + c]!; s += `<span style="color:${css(k.fg)}${k.bg ? `;background:${css(k.bg)}` : ""}">${esc(k.ch)}</span>`; } s += "\n"; }
     return `<pre style="margin:0;font:14px/17px Menlo,monospace;${withGlow ? "background:url(glow.png) 0 0/100% 100%;" : `background:${css(GROUND)};`}display:inline-block">${s}</pre>`;
   };
+  if (PIXELS) {
+    // The --pixels frame as the terminal would composite it: glow underneath, pixel tiles on top.
+    const cw = Number(value("--cellw") ?? 10), chh = Number(value("--cellh") ?? 20), n = DENSITY;
+    const fine = make(cols * n, rows * n, SEED ?? 4242, false);
+    for (let t = 0; t < SNAP_AT; t += 1 / 30) fine.tick(1 / 30);
+    const fc = fine.cells();
+    const art = rasterCells(fc, cols * n, 0, 0, cols * n, rows * n, cw, chh, n);
+    const g = glowImage(fc, cols * n, rows * n, 1, 2);
+    const W = art.width, H = art.height, outImg = new Uint8Array(W * H * 4);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const gi = (Math.min(g.height - 1, Math.floor((y / H) * g.height)) * g.width + Math.min(g.width - 1, Math.floor((x / W) * g.width))) * 4;
+      const o = (y * W + x) * 4, a = art.data[o + 3]! / 255;
+      for (let k = 0; k < 3; k++) outImg[o + k] = g.data[gi + k]! * (1 - a) + art.data[o + k]! * a;
+      outImg[o + 3] = 255;
+    }
+    writeFileSync(join(SNAPSHOT, "pixels.png"), png({ width: W, height: H, data: outImg }));
+  }
   writeFileSync(join(SNAPSHOT, "kitty.html"), `<meta charset="utf-8"><body style="margin:0;background:#000">${html(cells, true)}`);
   writeFileSync(join(SNAPSHOT, "text.html"), `<meta charset="utf-8"><body style="margin:0;background:#000">${html(textOnly, false)}`);
   console.log(`${withGlow.label()} -> ${SNAPSHOT}`);
@@ -201,7 +307,10 @@ let [cols, rows] = size();
 let kitty = false;
 const screen = new Screen();
 const glowLayer = new GlowLayer();
-const fresh = () => make(cols, rows, Math.floor(Math.random() * 1e9), !kitty);
+// In pixel mode the piece runs on the finer grid.
+const grid = () => (PIXELS && kitty ? [cols * DENSITY, rows * DENSITY] as const : [cols, rows] as const);
+const fresh = () => make(...grid(), Math.floor(Math.random() * 1e9), !kitty);
+let pixels: PixelLayer | null = null;
 let piece = make(cols, rows, SEED ?? Math.floor(Math.random() * 1e9), true);
 let running = true;
 let agents = 0;
@@ -211,7 +320,7 @@ const write = (s: string) => { if (s) out.write(s); };
 function restore() {
   if (!running) return;
   running = false;
-  write(glowLayer.dispose() + "\x1b[0m\x1b[2J\x1b[?25h\x1b[?1049l");
+  write(glowLayer.dispose() + (pixels?.dispose() ?? "") + "\x1b[0m\x1b[2J\x1b[?25h\x1b[?1049l");
   try { stdin.setRawMode(false); } catch {}
   stdin.pause();
 }
@@ -244,7 +353,7 @@ stdin.on("data", (buf: Buffer) => {
 out.on("resize", () => {
   [cols, rows] = size();
   screen.prev = [];
-  write("\x1b[0m\x1b[2J");
+  write((pixels?.reset() ?? "") + "\x1b[0m\x1b[2J");
   piece = fresh();
 });
 
@@ -264,8 +373,20 @@ async function detectKitty(): Promise<boolean> {
   });
 }
 
+/** The terminal's cell size in pixels (CSI 16t), so pixel tiles land one to one on its cells. */
+async function cellSize(): Promise<[number, number]> {
+  return new Promise((resolve) => {
+    const done = (v: [number, number]) => { clearTimeout(timer); probing = null; pending = ""; resolve(v); };
+    const timer = setTimeout(() => done([10, 20]), 400);
+    probing = (s) => { const m = /\x1b\[6;(\d+);(\d+)t/.exec(s); if (m) done([Number(m[2]), Number(m[1])]); };
+    write("\x1b[16t");
+  });
+}
+
 kitty = await detectKitty();
-piece = make(cols, rows, SEED ?? Math.floor(Math.random() * 1e9), !kitty);
+if (PIXELS && !kitty) { restore(); console.error("--pixels draws through Kitty graphics, which this terminal does not report; running as text instead."); process.exit(1); }
+if (PIXELS) { const [cw, chh] = await cellSize(); pixels = new PixelLayer(cw, chh, DENSITY); }
+piece = make(...grid(), SEED ?? Math.floor(Math.random() * 1e9), !kitty);
 let lastHalo = -1;
 let last = performance.now();
 let glowClock = 0;
@@ -285,10 +406,14 @@ const loop = () => {
     let sum = 0;
     for (const c of cells) if (c.halo) sum += c.halo[0] * 3 + c.halo[1] * 5 + c.halo[2] * 7;
     const halo = Math.round(sum);
-    if (halo !== lastHalo) { lastHalo = halo; frame += glowLayer.frame(glowImage(cells, cols, rows), cols, rows); }
+    const [gc, gr] = grid();
+    if (halo !== lastHalo) { lastHalo = halo; frame += glowLayer.frame(PIXELS ? glowImage(cells, gc, gr, 1, 2) : glowImage(cells, gc, gr), cols, rows); }
   }
-  frame += screen.paint(cells, cols, rows) + "\x1b[?2026l";
-  write(frame);
+  if (pixels) {
+    // A terminal still taking in earlier frames gets this one skipped, not queued.
+    if (out.writableLength < 2_000_000) frame += "\x1b7" + pixels.frame(cells, cols, rows) + "\x1b8";
+  } else frame += screen.paint(cells, cols, rows);
+  write(frame + "\x1b[?2026l");
   setTimeout(loop, Math.max(0, FRAME_MS - (performance.now() - now)));
 };
 loop();
