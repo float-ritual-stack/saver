@@ -10,13 +10,16 @@ const M: Record<string, RGB> = {
   teal: hex("#138f98"), mint: hex("#2fb98a"), lime: hex("#62c534"), yellow: hex("#e4ae00"),
   blue: hex("#2f6be0"), navy: hex("#2037a0"), purple: hex("#7440c4"), magenta: hex("#bb2dbd"),
   black: hex("#2a2926"), gray: hex("#86837c"), sky: hex("#3aa7e6"), forest: hex("#1f7a45"),
-  amber: hex("#e89a1c"), blush: hex("#f39cc6"),
+  amber: hex("#e89a1c"), blush: hex("#f39cc6"), frost: hex("#8fd3f4"), glacier: hex("#3fb8c4"),
+  rose: hex("#e8507a"), plum: hex("#8a3fa0"),
 };
 const PALETTES: Record<string, string[]> = {
   rainbow: ["pink", "orange", "teal", "lime", "blue", "purple", "magenta", "coral", "mint", "black"],
   coast: ["teal", "mint", "pink", "orange", "coral", "gray", "teal"],
   tricolor: ["red", "navy", "magenta", "purple", "red", "navy"],
   dusk: ["purple", "magenta", "orange", "black", "lime", "pink"],
+  ice: ["frost", "glacier", "blue", "black", "sky", "purple"],
+  sunset: ["coral", "amber", "rose", "plum", "yellow", "orange"],
 };
 
 // On black, dark inks turn to white gel and every colour lifts so it glows (as in Pen on Dots' dark theme).
@@ -115,7 +118,7 @@ function finalize(inks: Ink[], duration: number): Ink[] {
 }
 
 function buildMandala(cols: number, rows: number, r: Rng, seed: number): Built {
-  const paletteName = pick(r, [["rainbow", 3], ["coast", 2], ["tricolor", 1.5], ["dusk", 1.5]]);
+  const paletteName = pick(r, [["rainbow", 3], ["coast", 2], ["tricolor", 1.5], ["dusk", 1.5], ["ice", 1.5], ["sunset", 1.5]]);
   const pal = PALETTES[paletteName]!.map((n) => M[n]!);
   const cx = Math.floor(cols / 2), cy = Math.floor(rows / 2);
   const R = Math.max(6, Math.min(cx, cy) - 1);
@@ -254,13 +257,15 @@ function buildMandala(cols: number, rows: number, r: Rng, seed: number): Built {
 }
 
 function buildColumns(cols: number, rows: number, r: Rng, seed: number): Built {
-  const PAIRS = [["orange", "sky"], ["amber", "lime"], ["black", "orange"], ["magenta", "forest"], ["purple", "pink"], ["teal", "coral"]];
+  const PAIRS = [["orange", "sky"], ["amber", "lime"], ["black", "orange"], ["magenta", "forest"], ["purple", "pink"], ["teal", "coral"], ["frost", "rose"], ["plum", "amber"]];
   const LINES = ["pink", "yellow", "blue", "sky", "orange", "lime", "purple"];
   const inks: Ink[] = [];
   const top = 1, bottom = rows - 2;
-  let x = 2, block = 0, flip = r() < 0.5;
-  while (x < cols - 5) {
-    const w = Math.min(cols - 2 - x, 5 + Math.floor(r() * 5));
+  // A narrow page keeps a thinner margin and narrower blocks, so it still holds a block and a bundle or two.
+  const narrow = cols < 24, margin = narrow ? 1 : 2, least = narrow ? 3 : 5;
+  let x = margin, block = 0, flip = r() < 0.5;
+  while (x < cols - margin - least + 2) {
+    const w = Math.min(cols - margin - x, least + Math.floor(r() * 5));
     const [boxName, hatchName] = PAIRS[Math.floor(r() * PAIRS.length)]!;
     const sizes: number[] = [];
     let s = 2, total = 0;
@@ -282,7 +287,7 @@ function buildColumns(cols: number, rows: number, r: Rng, seed: number): Built {
     });
     x += w + 2; block++; flip = !flip;
     const n = 2 + Math.floor(r() * 3);
-    for (let i = 0; i < n && x < cols - 2; i++) {
+    for (let i = 0; i < n && x < cols - margin; i++) {
       const col = M[LINES[Math.floor(r() * LINES.length)]!]!;
       for (let yy = top; yy <= bottom; yy++) inks.push({ x, y: yy, ch: null, col, region: block, key: i * 4096 + yy, group: 900000 + block * 10 + i });
       x += 2;
@@ -331,10 +336,17 @@ type Spot = { x: number; y: number };
 type Live = (s: Sheet, t: number, wander: Spot, variant: number, extra: Spot[]) => void;
 
 const eclipse: Live = (s, time, p, variant, extra) => {
-  const W = s.w, H = s.h, cx = W / 2, cy = H / 2, R = Math.min(W, H);
+  const W = s.w, H = s.h, R = Math.min(W, H), wide = W >= H;
+  // A long page gets a pair of drifting shapes for each stretch of it, each on its own phase.
+  const n = Math.max(1, Math.round(Math.max(W, H) / (1.4 * R))), sw = wide ? W / n : W, sh = wide ? H : H / n;
   const blobs = [
-    { x: cx + Math.sin(time * 0.21) * W * 0.18, y: cy + Math.cos(time * 0.17) * H * 0.12, r: R * 0.26 },
-    { x: cx + Math.cos(time * 0.13 + 1) * W * 0.28, y: cy + Math.sin(time * 0.19 + 2) * H * 0.22, r: R * 0.16 },
+    ...Array.from({ length: n }, (_, k) => {
+      const cx = wide ? sw * (k + 0.5) : W / 2, cy = wide ? H / 2 : sh * (k + 0.5), t = time + k * 3.7;
+      return [
+        { x: cx + Math.sin(t * 0.21) * sw * 0.18, y: cy + Math.cos(t * 0.17) * sh * 0.12, r: R * 0.26 },
+        { x: cx + Math.cos(t * 0.13 + 1) * sw * 0.28, y: cy + Math.sin(t * 0.19 + 2) * sh * 0.22, r: R * 0.16 },
+      ];
+    }).flat(),
     { x: p.x, y: p.y, r: R * 0.13 },
     ...extra.map((e) => ({ x: e.x, y: e.y, r: R * 0.09 })),   // one more shape under the lines per running subagent
   ];
@@ -353,28 +365,44 @@ const eclipse: Live = (s, time, p, variant, extra) => {
 };
 
 const venn: Live = (s, time, p, variant, extra) => {
-  const W = s.w, H = s.h, R = Math.min(W, H), cx = W / 2, cy = H / 2;
-  const A = { x: cx - R * 0.16 + Math.sin(time * 0.23) * R * 0.05, y: cy - R * 0.14 + Math.cos(time * 0.19) * R * 0.04, r: R * 0.32 };
-  const B = { x: cx + R * 0.14 + Math.cos(time * 0.17) * R * 0.05, y: cy + R * 0.16 + Math.sin(time * 0.21) * R * 0.04, r: R * 0.32 };
+  const W = s.w, H = s.h, wide = W >= H, L = wide ? W : H, S = wide ? H : W;
+  // The pair of circles is sized to the short axis and repeated along the long one, each pair drifting on
+  // its own phase and every other one mirrored.
+  const n = Math.max(1, Math.round(L / (1.45 * S))), R = Math.min(S, L / (n * 1.15));
+  // A small page sets its pair side by side along the long axis and overlaps them more, so the hatched lens
+  // stays wide enough to read; it packs its hatching and pluses closer too.
+  const compact = R < 16, gutter = Math.min(0.7, R * 0.05), grid = compact ? 2 : 3, hatch = compact ? 1 : 2;
+  const [ax, ay, bx, by, cr] = compact ? [0.08, 0.04, 0.08, 0.04, Math.min(0.56, (S / 2 - 0.3) / R)] : [0.16, 0.14, 0.14, 0.16, 0.32];
+  const sway = R * (compact ? 0.03 : 0.05);
+  const pairs = Array.from({ length: n }, (_, k) => {
+    const u = (L * (k + 0.5)) / n, t = time + k * 2.3, m = k % 2 ? -1 : 1;
+    const [mx, my] = wide ? [u, H / 2] : [W / 2, u];
+    const along = (a: number, b: number) => (wide ? [a, b] : [b, a]) as [number, number];
+    const [dax, day] = along(-ax * R, -m * ay * R), [dbx, dby] = along(bx * R, m * by * R);
+    return [
+      { x: mx + dax + Math.sin(t * 0.23) * sway, y: my + day + Math.cos(t * 0.19) * sway * 0.8, r: R * cr },
+      { x: mx + dbx + Math.cos(t * 0.17) * sway, y: my + dby + Math.sin(t * 0.21) * sway * 0.8, r: R * cr },
+    ];
+  });
+  const As = pairs.map((q) => q[0]!), Bs = pairs.map((q) => q[1]!);
   // The small circle, and one more per running subagent.
   const small = [{ x: p.x, y: p.y, r: R * 0.18 }, ...extra.map((e) => ({ x: e.x, y: e.y, r: R * 0.11 }))];
   const d = (c: { x: number; y: number; r: number }, x: number, y: number) => Math.hypot(x - c.x, y - c.y) - c.r;
+  const near = (cs: { x: number; y: number; r: number }[], x: number, y: number) => { let v = Infinity; for (const c of cs) v = Math.min(v, d(c, x, y)); return v; };
   const dotCol = variant === 1 ? M.coral! : M.pink!, lensCol = variant === 1 ? M.purple! : M.blush!;
   const barCol = variant === 1 ? M.teal! : M.blue!, plusCol = variant === 1 ? M.navy! : M.purple!;
   for (let y = 0; y < H; y++) for (let x = 1; x < W - 1; x++) {
     const px = x + 0.5, py = y + 0.5;
-    const da = d(A, px, py), db = d(B, px, py);
-    let dc = Infinity;
-    for (const c of small) dc = Math.min(dc, d(c, px, py));
+    const da = near(As, px, py), db = near(Bs, px, py), dc = near(small, px, py);
     const inA = da < 0, inB = db < 0, inC = dc < 0;
-    if (Math.abs(da) < 0.7 || Math.abs(db) < 0.7 || Math.abs(dc) < 0.7) continue;   // a gutter keeps edges readable
+    if (Math.abs(da) < gutter || Math.abs(db) < gutter || Math.abs(dc) < gutter) continue;   // a gutter keeps edges readable
     if (inC && (inA || inB)) { if (y % 2 === 0) s.put(x, y, null, barCol, 200000 + y); continue; }
-    if (inA && inB) { if (x % 2 === 0) s.put(x, y, null, lensCol, 100000 + x); continue; }
+    if (inA && inB) { if (x % hatch === 0) s.put(x, y, null, lensCol, 100000 + x); continue; }
     if (inA || inB) { s.put(x, y, "·", dotCol, 1); continue; }
     if (inC) { if (x % 2 === 0 && y % 2 === 0) s.put(x, y, "•", barCol, 2); continue; }
-    if (x % 3 !== 0 || y % 3 !== 0) continue;
+    if (x % grid !== 0 || y % grid !== 0) continue;
     // Plus marks near a circle lose the arms that would cross it.
-    const clear = (ox: number, oy: number) => Math.min(d(A, px + ox, py + oy), d(B, px + ox, py + oy), ...small.map((c) => d(c, px + ox, py + oy))) > 1.2;
+    const clear = (ox: number, oy: number) => Math.min(near(As, px + ox, py + oy), near(Bs, px + ox, py + oy), near(small, px + ox, py + oy)) > 1.2;
     if (!clear(0, 0)) continue;
     const mask = (clear(-1, 0) ? 1 : 0) | (clear(1, 0) ? 2 : 0) | (clear(0, -1) ? 4 : 0) | (clear(0, 1) ? 8 : 0);
     s.put(x, y, PLUS(mask), plusCol, 3);

@@ -8,7 +8,7 @@
 //
 //   bun saver.ts                 any key exits
 //   bun saver.ts --play          space: new piece seed  p: a tool call  a/A: one more/fewer subagent  m: a message  q: quit
-//   bun saver.ts --piece NAME    cycle (default: each piece in turn), lattice, mandala, eclipse, venn, columns, gargantua
+//   bun saver.ts --piece NAME    cycle (default: each piece in turn) or any piece: lattice, mandala, eclipse, venn, columns, plusfield, loom, canopy, seed, gargantua, truchet, tartan, ripple
 //   bun saver.ts --text          never use graphics
 //   bun saver.ts --no-listen     ignore Claude Code (by default the saver mod's pulses reach every running saver)
 //   bun saver.ts --fx NAME       effects: auto (default), off, cycle, shimmer, beam, drift, glitch (f cycles them with --play)

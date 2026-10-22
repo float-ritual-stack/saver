@@ -9,6 +9,7 @@ import type { Cell, Piece, PieceOptions, Pulse, RGB } from "./core";
 const RAMP = " .,:;-=+*oxO#%@";
 const R_IN = 3, R_OUT = 14;
 const CELL_ASPECT = 0.5;
+const DISK = 1.55, SKY = 0.4;   // half the long axis and least half the short axis of the view, in screen units (the disk's rim is near 1.34)
 
 const fract = (x: number) => x - Math.floor(x);
 function hash13(x: number, y: number, z: number) {
@@ -58,7 +59,8 @@ function trace(px: number, py: number, cam: { yaw: number; pitch: number; dist: 
     const r2 = x * x + y * y + z * z, r = Math.sqrt(r2);
     if (r < minR) minR = r;
     if (r < 1) { captured = true; break; }
-    if (r > dist * 1.6 + 20 && x * vx + y * vy + z * vz > 0) break;
+    // Outgoing beyond the photon sphere, a ray never turns back; past the camera it bends too little to matter.
+    if (r > dist && x * vx + y * vy + z * vz > 0) break;
     const dt = Math.max(0.03, Math.min(1.5, (0.09 * r * r) / (r + 4)));
     const k = (-1.5 * h2) / (r2 * r2 * r);
     vx += k * x * dt; vy += k * y * dt; vz += k * z * dt;
@@ -109,6 +111,11 @@ export const gargantua: Piece = {
   blurb: "a black hole, ray-traced one cell at a time",
   create(cols: number, rows: number, seed: number, opts: PieceOptions) {
     const steps = Math.round(90 + 260 * (opts.quality ?? 1));
+    // The disk is far wider than tall, so it lies along the pane's long axis (a tall pane rolls the camera a
+    // quarter turn) and the long axis sets the zoom: the disk spans most of it. A very wide strip still keeps
+    // the shadow and some of the lensed arch above it in view. `view` is screen units per cell row.
+    const across = cols * CELL_ASPECT, upright = rows > across;
+    const view = Math.max((DISK * 2) / Math.max(across, rows), (SKY * 2) / Math.min(across, rows));
     const cam = { yaw: (seed % 628) / 100, pitch: 0.1, dist: 22 };
     let time = 0, wall = 0, feed = 0, agents = 0, swing = 0, swingTo = 0;
     return {
@@ -122,10 +129,9 @@ export const gargantua: Piece = {
       },
       cells(): Cell[] {
         const cells = blankCells(cols * rows, opts);
-        const half = rows / 2;
         for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
-          const px = ((col + 0.5 - cols / 2) * CELL_ASPECT) / half;
-          const py = -(row + 0.5 - half) / half;
+          const sx = (col + 0.5 - cols / 2) * CELL_ASPECT * view, sy = -(row + 0.5 - rows / 2) * view;
+          const px = upright ? sy : sx, py = upright ? -sx : sy;
           const t = trace(px, py, cam, time, steps, feed + agents * 0.35);
           const tr = 1 - Math.exp(-t.r * 2.6), tg = 1 - Math.exp(-t.g * 2.6), tb = 1 - Math.exp(-t.b * 2.6);
           const L = 0.299 * tr + 0.587 * tg + 0.114 * tb;

@@ -8,9 +8,11 @@ const SETS: RGB[][] = [
   ["#f2c200", "#2f7fe0", "#8a4fd6", "#e0342b"].map(hex),     // the journal page: yellow ground, blue, purple, red
   ["#2ee0c8", "#ff5fa8", "#ffd23f", "#5b8cff"].map(hex),
   ["#e9e5da", "#ff6b4a", "#a57bff", "#9bf05a"].map(hex),
+  ["#ff9e5e", "#e8507a", "#8a5cff", "#ffd23f"].map(hex),     // sunset
+  ["#9bd16a", "#2fb98a", "#d9c56a", "#5b8cff"].map(hex),     // moss
 ];
 
-interface Region { x: number; y: number; r: number; ax: number; ay: number; sx: number; sy: number; ph: number; col: number }
+interface Region { x: number; y: number; hx: number; hy: number; r: number; ax: number; ay: number; sx: number; sy: number; ph: number; col: number }
 
 export const plusfield: Piece = {
   name: "plusfield",
@@ -20,11 +22,15 @@ export const plusfield: Piece = {
     const w = cols >> 1, h = rows;                  // two columns to a dot, so regions stay round
     const R = Math.min(w, h);
     let set = Math.floor(r() * SETS.length), time = r() * 100, swell = 0;
-    const region = (col: number): Region => ({
+    // A long pane is split into stretches along its length, each with regions drifting around its own middle.
+    const stretches = Math.max(1, Math.round(Math.max(w, h) / (1.4 * R)));
+    const sw = w >= h ? w / stretches : w, sh = w >= h ? h : h / stretches;
+    const region = (col: number, at = Math.floor(r() * stretches)): Region => ({
       x: w * (0.2 + r() * 0.6), y: h * (0.2 + r() * 0.6), r: R * (0.18 + r() * 0.16),
-      ax: w * (0.1 + r() * 0.25), ay: h * (0.1 + r() * 0.25), sx: 0.05 + r() * 0.08, sy: 0.05 + r() * 0.08, ph: r() * 6.28, col,
+      hx: w >= h ? sw * (at + 0.5) : w / 2, hy: w >= h ? h / 2 : sh * (at + 0.5),
+      ax: sw * (0.1 + r() * 0.25), ay: sh * (0.1 + r() * 0.25), sx: 0.05 + r() * 0.08, sy: 0.05 + r() * 0.08, ph: r() * 6.28, col,
     });
-    const base = [region(1), region(2), region(3)];
+    const base = Array.from({ length: 3 * stretches }, (_, k) => region(1 + (k % 3), Math.floor(k / 3)));
     let extra: Region[] = [];
 
     // The region that owns a point: the one it sits deepest inside, else the ground (colour 0).
@@ -42,8 +48,8 @@ export const plusfield: Piece = {
         time += dt;
         swell *= Math.exp(-dt * 1.5);
         for (const g of [...base, ...extra]) {
-          g.x = w / 2 + Math.sin(time * g.sx + g.ph) * g.ax;
-          g.y = h / 2 + Math.cos(time * g.sy + g.ph * 1.3) * g.ay;
+          g.x = g.hx + Math.sin(time * g.sx + g.ph) * g.ax;
+          g.y = g.hy + Math.cos(time * g.sy + g.ph * 1.3) * g.ay;
         }
       },
       cells(): Cell[] {

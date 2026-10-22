@@ -8,6 +8,9 @@ import { loom } from "./loom";
 import { columns, eclipsePiece, mandala, vennPiece } from "./pen";
 import { plusfield } from "./plusfield";
 import { seedPiece } from "./seed";
+import { ripple } from "./ripple";
+import { tartan } from "./tartan";
+import { truchet } from "./truchet";
 
 import { withFx } from "./fx";
 import type { FxControl, FxMode } from "./fx";
@@ -18,7 +21,7 @@ export const setFx = (m: FxMode) => { fxMode = m; };
 export const getFx = () => fxMode;
 const fx = (p: Piece) => withFx(p, () => fxMode);
 
-const ROTATION: Piece[] = [lattice, mandala, plusfield, canopy, seedPiece, eclipsePiece, gargantua, loom, vennPiece, columns].map(fx);
+const ROTATION: Piece[] = [lattice, mandala, plusfield, canopy, seedPiece, eclipsePiece, gargantua, loom, vennPiece, columns, truchet, tartan, ripple].map(fx);
 
 // Each of the others in turn, a minute and a half apiece: the outgoing piece's palette spins and dissolves,
 // and the next one decrypts in.

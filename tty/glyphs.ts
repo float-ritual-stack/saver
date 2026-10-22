@@ -18,6 +18,12 @@ const arms = (l: boolean, r: boolean, u: boolean, d: boolean): Shape[] => [
   ...(u ? [seg(M, 0, M, M)] : []), ...(d ? [seg(M, M, M, 1)] : []),
 ];
 const END = 0.06;   // a pen lift leaves a small pool of ink
+// A rounded corner: a quarter ellipse through two edge midpoints, centred on the cell corner (cx, cy) it bows away from.
+const arc = (cx: number, cy: number): Shape[] => {
+  const dx = cx ? -M : M, dy = cy ? -M : M, n = 6;
+  const at = (i: number): [number, number] => [cx + dx * Math.sin((i / n) * Math.PI / 2), cy + dy * Math.cos((i / n) * Math.PI / 2)];
+  return Array.from({ length: n }, (_, i) => seg(...at(i), ...at(i + 1)));
+};
 
 const SHAPES: Record<string, Shape[]> = {
   "─": arms(true, true, false, false), "│": arms(false, false, true, true),
@@ -26,6 +32,7 @@ const SHAPES: Record<string, Shape[]> = {
   "├": arms(false, true, true, true), "┤": arms(true, false, true, true),
   "┬": arms(true, true, false, true), "┴": arms(true, true, true, false),
   "┼": arms(true, true, true, true),
+  "╭": arc(1, 1), "╮": arc(0, 1), "╰": arc(1, 0), "╯": arc(0, 0),
   "╴": [...arms(true, false, false, false), dot(M, M, END)], "╶": [...arms(false, true, false, false), dot(M, M, END)],
   "╵": [...arms(false, false, true, false), dot(M, M, END)], "╷": [...arms(false, false, false, true), dot(M, M, END)],
   "╎": [seg(M, 0.1, M, 0.4), seg(M, 0.6, M, 0.9)],

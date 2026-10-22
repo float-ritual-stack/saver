@@ -9,6 +9,8 @@ const LIGHTS: RGB[][] = [
   ["#ff3fb4", "#7a5bff", "#ff3b4a"].map(hex),     // the room: magenta, blue, red
   ["#2ee0c8", "#5b8cff", "#a57bff"].map(hex),
   ["#ffb03a", "#ff3fb4", "#e9e5da"].map(hex),
+  ["#9bd16a", "#2fb98a", "#d9c56a"].map(hex),     // moss
+  ["#ff9e5e", "#e8507a", "#ffd23f"].map(hex),     // sunset
 ];
 const CLOTH = hex("#efe8dc"), INK = hex("#0b0b0f");
 

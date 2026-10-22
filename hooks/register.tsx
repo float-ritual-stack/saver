@@ -92,7 +92,7 @@ export const register: Register = on => {
     }
     if (arg && arg !== 'on' && !PIECES[arg]) return { text: `No piece "${arg}". Pieces: ${NAMES.join(', ')}.` }
     if (arg && arg !== 'on') await update($, piece, () => arg)
-    // Bare /saver shows the list, with the keyboard on it so 1-7 pick straight away.
+    // Bare /saver shows the list, with the keyboard on it so a piece's key picks it straight away.
     await update($, mode, () => (arg ? 'play' : 'pick'))
     await $.ui.open({ id: PANE, title: 'saver', ...(arg ? {} : { focus: true as const }) })
     return { text: arg ? `Saver: ${await read($, piece)}.` : 'Saver: press a piece\'s key to play it.' }

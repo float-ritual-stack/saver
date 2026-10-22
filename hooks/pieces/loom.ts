@@ -9,6 +9,8 @@ const INKS: { edge: RGB; fill: RGB; tick: RGB; line: RGB }[] = [
   { edge: hex("#e83fc4"), fill: hex("#e4b400"), tick: hex("#ff7a1f"), line: hex("#2a8fb8") },   // the journal page
   { edge: hex("#2ee0c8"), fill: hex("#5b3fb0"), tick: hex("#ffd23f"), line: hex("#ff5fa8") },
   { edge: hex("#ff6b4a"), fill: hex("#1f6f5a"), tick: hex("#e9e5da"), line: hex("#ffb03a") },
+  { edge: hex("#8fd3f4"), fill: hex("#1f4f8f"), tick: hex("#e9e5da"), line: hex("#4cc3c9") },   // ice
+  { edge: hex("#ff9e5e"), fill: hex("#7a2e6a"), tick: hex("#ffd23f"), line: hex("#e8507a") },   // sunset
 ];
 
 export const loom: Piece = {

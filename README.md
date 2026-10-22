@@ -59,9 +59,13 @@ Narrower, it sits above the prompt.
 | canopy | Op-art stripes in square rings flowing into a drifting vanishing point, woven with a zigzag and lit magenta, blue and red. |
 | seed | A flower of life drawn circle by circle, with dotwork shading, a nested triangle frame and a turning triskele. |
 | gargantua | A black hole, ray-traced one character cell at a time. |
+| truchet | Rounded Truchet tiles whose arcs join into winding paths and closed loops, each path its own colour. Fronts of flips roll across and the paths re-route behind them. |
+| tartan | A woven plaid: a mirrored sett of stripes as warp and weft, crossing in a 2/2 twill, sliding slowly. |
+| ripple | A pond in the rain. Drops land across the whole surface and their rings pass through each other. |
 | cycle | Each of the others in turn, a minute and a half apiece. |
 
 Most pieces come from dot-grid marker drawings in a journal; canopy and seed come from tattoos and a striped canopy.
+Every piece sizes itself to its pane: a strip above the prompt, a narrow docked column, a small tile or an ultra-wide window.
 They keep the drawings' rules: the pen moves dot to dot, lines echo lines, and everything mirrors.
 
 ## Effects
@@ -92,6 +96,9 @@ A tool call sets off a shimmer burst; your message mid-turn sets off a colour-cy
 | canopy | the stripes flow faster | adds a vanishing point whose rings interfere | turns the lights |
 | seed | scatters fresh dotwork | opens another ring of circles | reverses the triskele and changes its colour |
 | gargantua | the disk flares | the disk spins faster and hotter | the camera swings |
+| truchet | a burst of flips spreads from a random point | keeps another flipping front rolling | changes the colours |
+| tartan | a bright shuttle crosses one row | weaves another thin stripe into the sett | threads a new sett and palette |
+| ripple | a drop lands | the rain gets heavier | changes the light and drops a big one in the middle |
 
 ## Terminal screen saver
 

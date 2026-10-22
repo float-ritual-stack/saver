@@ -7,6 +7,8 @@ const PALETTES: Record<string, RGB[]> = {
   ember: ["#ff6b4a", "#ffb03a", "#f2e6c9", "#ff4f7b", "#ffd23f"].map(hex),
   tide: ["#2ee0c8", "#5b8cff", "#9bf05a", "#e9e5da", "#2fb4ff"].map(hex),
   chalk: ["#e9e5da", "#a57bff", "#e9e5da", "#ff5fa8", "#8a8d99"].map(hex),
+  riso: ["#ff48b0", "#3d7bff", "#ffe23a", "#00c2a8", "#ff6c2f"].map(hex),       // fluoro pink, federal blue, yellow, teal
+  moss: ["#9bd16a", "#3fbf7f", "#d9c56a", "#c7e8a0", "#6fd3a8"].map(hex),
 };
 
 // ── The lattice ─────────────────────────────────────────────────────────────
@@ -55,14 +57,22 @@ export class Lattice {
     this.view.oy = this.C0 - (h >> 1);
     this.stroke = new Int32Array(this.N * this.N).fill(-1);
     this.born = new Float32Array(this.N * this.N);
-    this.paletteName = pick(this.r, [["gel", 3], ["ember", 1.5], ["tide", 1.5], ["chalk", 1]]);
+    this.paletteName = pick(this.r, [["gel", 3], ["ember", 1.5], ["tide", 1.5], ["chalk", 1], ["riso", 1.5], ["moss", 1]]);
     this.palette = PALETTES[this.paletteName]!;
     this.symmetry = symmetry ?? pick<Sym>(this.r, [["D4", 3], ["D2", 1.5], ["C4", 1]]);
     this.metrics = [["cheb", 1 + this.r() * 2], ["manh", 1 + this.r() * 2], ["oct", 1 + this.r() * 2]];
     this.sprout = 0.25 + this.r() * 0.35;
     this.gatesMax = Math.floor(this.r() * 4);
     this.paletteIndex = Math.floor(this.r() * 8);
-    this.plant(this.C0, this.C0, pick(this.r, [["diamond", 3], ["square", 2], ["star", 2], ["plus", 1]]), 0);
+    const kind = pick(this.r, [["diamond", 3], ["square", 2], ["star", 2], ["plus", 1]]);
+    this.plant(this.C0, this.C0, kind, 0);
+    // A long view gets seeds along its length as well (mirrored, like everything), so the echoes reach its
+    // ends while the page is young instead of one island growing out of the middle.
+    const step = Math.max(8, Math.round(Math.min(w, h) * 1.2));
+    for (let k = 1; k * step < Math.max(w, h) / 2 - 2; k++) {
+      const d = k * step;
+      this.plant(w >= h ? this.C0 + d : this.C0, w >= h ? this.C0 : this.C0 + d, kind, k * 0.3);
+    }
     this.nextStep = 0.9;
   }
 
